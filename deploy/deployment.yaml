@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: k8s-webhook
+    developer: devang
+  name: k8s-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-webhook
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: k8s-webhook
+    spec:
+      containers:
+      - image: docker.io/devanggaur7/k8s-webhook
+        name: k8s-webhook
+        ports:
+        - containerPort: 8443
+        resources: {}

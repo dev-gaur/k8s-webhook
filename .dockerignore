@@ -3,3 +3,5 @@
 *.conf
 *.crt
 *.yaml
+secrets/*
+certs/*
