@@ -4,3 +4,4 @@
 *.crt
 secrets/*
 certs/*
+deploy/*secret.yaml
