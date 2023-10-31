@@ -4,11 +4,11 @@ metadata:
   labels:
     app: k8s-webhook
     developer: devang
-  name: k8s-webhook
-  namespace: dg-webhook
+  name: example-webhook
+  namespace: default
 spec:
   ports:
-  - port: 80
+  - port: 443
     protocol: TCP
     targetPort: 8443
   selector:

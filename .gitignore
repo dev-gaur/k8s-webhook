@@ -2,6 +2,5 @@
 *.csr
 *.conf
 *.crt
-*.yaml
 secrets/*
 certs/*

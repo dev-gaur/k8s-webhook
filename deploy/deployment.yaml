@@ -5,6 +5,7 @@ metadata:
     app: k8s-webhook
     developer: devang
   name: k8s-webhook
+  namespace: default
 spec:
   replicas: 1
   selector:
@@ -22,3 +23,11 @@ spec:
         ports:
         - containerPort: 8443
         resources: {}
+        volumeMounts:
+        - name: secret-volume
+          mountPath: /etc/secrets
+          readOnly: true
+      volumes:
+      - name: secret-volume
+        secret:
+          secretName: k8s-webhook-tls

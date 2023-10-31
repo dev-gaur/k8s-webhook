@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	m "github.com/dev-gaur/k8s-webhook/internal/mutate"
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 )
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -23,29 +23,22 @@ func handleMutate(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		sendError(err, w)
-		return
+		panic(fmt.Errorf("err reading the request body: %v", err.Error()))
 	}
 
 	// mutate the request
 	mutated, err := m.Mutate(body, true)
 	if err != nil {
-		sendError(err, w)
-		return
+		panic(fmt.Errorf("error in mutation: %v", err))
 	}
 
 	// and write it back
 	w.WriteHeader(http.StatusOK)
 	w.Write(mutated)
 }
-func sendError(err error, w http.ResponseWriter) {
-	log.Println(err)
-	w.WriteHeader(http.StatusInternalServerError)
-	fmt.Fprintf(w, "%s", err)
-}
 
 func main() {
-	log.Println("Starting server ...")
+	log.Info().Msg("starting server...")
 
 	r := mux.NewRouter()
 	r.Use(logMW)
@@ -61,14 +54,16 @@ func main() {
 		MaxHeaderBytes: 1 << 20, // 1048576
 	}
 
-	log.Fatal(s.ListenAndServe())
-	//log.Fatal(s.ListenAndServeTLS("./ssl/mutateme.pem", "./ssl/mutateme.key"))
+	err := s.ListenAndServeTLS("/etc/secrets/tls.crt", "/etc/secrets/tls.key")
+	if err != nil {
+		panic(fmt.Sprintf("server crashed: %s", err.Error()))
+	}
 }
 
 // for global use (using a http.Handler!)
 func logMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s - %s (%s)", r.Method, r.URL.Path, r.RemoteAddr)
+		log.Info().Msg(fmt.Sprintf("%s - %s (%s)", r.Method, r.URL.Path, r.RemoteAddr))
 
 		// compare the return-value to the authMW
 		next.ServeHTTP(w, r)
@@ -81,10 +76,11 @@ func recovery(next http.Handler) http.Handler {
 		defer func() {
 			err := recover()
 			if err != nil {
-				fmt.Println(err) // May be log this error? Send to sentry?
+				log.Error().Msg(fmt.Sprintf("%v", err))
 
-				jsonBody, _ := json.Marshal(map[string]string{
-					"error": "There was an internal server error",
+				jsonBody, _ := json.Marshal(map[string]interface{}{
+					"error":     "internal server error",
+					"errorBody": err,
 				})
 
 				w.Header().Set("Content-Type", "application/json")

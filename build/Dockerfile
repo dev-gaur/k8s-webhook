@@ -15,6 +15,5 @@ RUN go mod download
 RUN go build -x -o /mutation-server
 
 EXPOSE 8443
-
 # Run
 CMD ["/mutation-server"]
