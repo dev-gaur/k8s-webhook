@@ -20,7 +20,7 @@ spec:
       containers:
       - image: docker.io/devanggaur7/k8s-webhook
         name: k8s-webhook
-        args: ["--debug", "true"]
+        args: ["--debug", "false"]
         ports:
         - containerPort: 8443
         resources: {}
