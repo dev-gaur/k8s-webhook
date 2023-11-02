@@ -15,6 +15,8 @@ import (
 func main() {
 	debug := flag.Bool("debug", false, "enable for verbose logs")
 
+	flag.Parse()
+
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if *debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
