@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/dev-gaur/k8s-webhook/internal/handler"
@@ -38,9 +42,21 @@ func main() {
 		MaxHeaderBytes: 1 << 20, // 1048576
 	}
 
-	//err := s.ListenAndServe()
-	err := s.ListenAndServeTLS("/etc/secrets/tls.crt", "/etc/secrets/tls.key")
+	err := s.ListenAndServe()
+	//err := s.ListenAndServeTLS("/etc/secrets/tls.crt", "/etc/secrets/tls.key")
 	if err != nil {
 		panic(fmt.Sprintf("server crashed: %s", err.Error()))
 	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	s.Shutdown(ctx)
+
+	if err != nil {
+		log.Fatal().Msg(fmt.Sprintf("server failed to exit gracefully. error: '%v'", err))
+	}
+	log.Info().Msg("server exiting gracefully")
 }
