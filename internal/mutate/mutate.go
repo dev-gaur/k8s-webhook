@@ -16,61 +16,24 @@ import (
 )
 
 // Mutate mutates
-func Mutate(body []byte, verbose bool) ([]byte, error) {
-	if verbose {
-		log.Info().Msg(fmt.Sprintf("recv: %s\n", string(body)))
-	}
+func Mutate(body []byte) ([]byte, error) {
+	log.Debug().Msg(fmt.Sprintf("recv: %s\n", string(body)))
 
-	// unmarshal request into AdmissionReview struct
 	admReview := v1.AdmissionReview{}
 	if err := json.Unmarshal(body, &admReview); err != nil {
 		return nil, fmt.Errorf("unmarshaling request failed with %s", err)
 	}
 
-	if verbose {
-		log.Info().Msg(fmt.Sprintf("admission review: %v\n", admReview))
-	}
+	log.Debug().Msg(fmt.Sprintf("admission review: %v\n", admReview))
 
-	var pod *corev1.Pod
-
-	ar := admReview.Request
-
-	if verbose {
-		log.Info().Msg(fmt.Sprintf("admission review request: %v\n", ar))
-	}
-
-	if ar == nil {
-		return nil, fmt.Errorf("admission request is nil")
-	}
-
-	// get the Pod object and unmarshal it into its struct, if we cannot, we might as well stop here
-	if err := json.Unmarshal(ar.Object.Raw, &pod); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal pod json object %v", err)
-	}
-
-	if verbose {
-		log.Info().Msg(fmt.Sprintf("pod: %v\n", pod))
-	}
-
-	var err error
-
-	annotatedPodBytes, err := addAnnotation(pod)
+	pod, err := getPod(admReview.Request)
 	if err != nil {
-		return nil, fmt.Errorf("error adding annotation: %v", err)
+		return nil, fmt.Errorf("error extracting pod: %w", err)
 	}
 
-	if verbose {
-		log.Info().Msg(fmt.Sprintf("annotated pod: %s\n", string(annotatedPodBytes)))
-	}
-
-	patches, err := jsonpatch.CreatePatch(ar.Object.Raw, annotatedPodBytes)
+	patchBytes, err := createPatchForPodAnnotation(admReview.Request.Object.Raw, pod)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create patch: %v", err)
-	}
-
-	patchBytes, err := json.Marshal(patches)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal patches")
+		return nil, fmt.Errorf("error creating pod annotation patch: %w", err)
 	}
 
 	admReview.Response = &v1.AdmissionResponse{
@@ -82,9 +45,9 @@ func Mutate(body []byte, verbose bool) ([]byte, error) {
 			"assignedBy": "devanggaur",
 		},
 		Allowed: true,
-		UID:     ar.UID,
+		UID:     admReview.Request.UID,
 		PatchType: func() *v1.PatchType {
-			if len(patches) == 0 {
+			if len(patchBytes) == 0 {
 				return nil
 			}
 			pt := v1.PatchTypeJSONPatch
@@ -92,15 +55,9 @@ func Mutate(body []byte, verbose bool) ([]byte, error) {
 		}(),
 	}
 
-	// back into JSON so we can return the finished AdmissionReview w/ Response directly
-	// w/o needing to convert things in the http handler
 	responseBody, err := json.Marshal(admReview)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling admission response: %v", err)
-	}
-
-	if verbose {
-		log.Printf("resp: %s\n", string(responseBody)) // untested section
 	}
 
 	return responseBody, nil
@@ -113,4 +70,39 @@ func addAnnotation(pod *corev1.Pod) (list []byte, err error) {
 
 	pod.ObjectMeta.Annotations["owner"] = "devang"
 	return json.Marshal(pod)
+}
+
+func getPod(admReq *v1.AdmissionRequest) (*corev1.Pod, error) {
+	var pod *corev1.Pod
+
+	log.Debug().Msg(fmt.Sprintf("admission review request: %v\n", admReq))
+
+	if admReq == nil {
+		return nil, fmt.Errorf("admission request is nil")
+	}
+
+	if err := json.Unmarshal(admReq.Object.Raw, &pod); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal pod json object %v", err)
+	}
+
+	return pod, nil
+}
+
+func createPatchForPodAnnotation(rawObject []byte, pod *corev1.Pod) ([]byte, error) {
+	annotatedPodBytes, err := addAnnotation(pod)
+	if err != nil {
+		return nil, fmt.Errorf("error adding annotation: %w", err)
+	}
+
+	patches, err := jsonpatch.CreatePatch(rawObject, annotatedPodBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create patch: %w", err)
+	}
+
+	patchBytes, err := json.Marshal(patches)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal patches")
+	}
+
+	return patchBytes, nil
 }
